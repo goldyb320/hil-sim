@@ -45,22 +45,29 @@ def main() -> None:
 
     p = DCMotorParams()
     ctrl = PIController(kp=args.kp, ki=args.ki, output_min=-args.v_max, output_max=args.v_max)
+    ctrl.reset()
 
     n = int(round(args.t_end / plant_dt))
     t = np.arange(n + 1) * plant_dt
     xs = np.zeros((n + 1, 2))
     v_cmd = np.zeros(n + 1)
+    p_term = np.zeros(n + 1)
+    i_term = np.zeros(n + 1)
 
     v = 0.0
     for k in range(n):
         if k % ctrl_period_steps == 0:
             v = ctrl.update(args.setpoint, xs[k, 1], ctrl_dt)
         v_cmd[k] = v
+        p_term[k] = ctrl.last_p
+        i_term[k] = ctrl.last_i
 
         t_load = args.load if t[k] >= args.load_time else 0.0
         f = lambda x, v=v, t_load=t_load: derivatives(x, v, t_load, p)  # noqa: E731
         xs[k + 1] = rk4_step(f, xs[k], plant_dt)
     v_cmd[n] = v
+    p_term[n] = ctrl.last_p
+    i_term[n] = ctrl.last_i
 
     fig, (ax_w, ax_v, ax_i) = plt.subplots(3, 1, sharex=True)
 
@@ -69,8 +76,11 @@ def main() -> None:
     ax_w.set_ylabel("speed [rad/s]")
     ax_w.legend()
 
-    ax_v.step(t, v_cmd, where="post")
-    ax_v.set_ylabel("voltage cmd [V]")
+    ax_v.step(t, v_cmd, where="post", label="v_cmd (P+I)", linewidth=2)
+    ax_v.step(t, p_term, where="post", label="P term", linestyle="--")
+    ax_v.step(t, i_term, where="post", label="I term", linestyle=":")
+    ax_v.set_ylabel("voltage [V]")
+    ax_v.legend()
 
     ax_i.plot(t, xs[:, 0])
     ax_i.set_ylabel("current [A]")
