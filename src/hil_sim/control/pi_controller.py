@@ -16,11 +16,23 @@ class PIController:
     integral: float = 0.0
 
     def reset(self) -> None:
-        raise NotImplementedError("Milestone 1: reset internal state")
+        self.integral = 0.0
 
     def update(self, setpoint: float, measurement: float, dt_s: float) -> float:
         """Return the actuator command for this step.
 
         Things to think about: output saturation, and integrator windup when saturated.
         """
-        raise NotImplementedError("Milestone 1: implement the PI law")
+
+        # Set points for the proportional and integral error terms, integral use for seped control
+        error = setpoint - measurement
+        self.integral += error * dt_s
+
+        output = self.kp * error + self.ki * self.integral
+        if output < self.output_min:
+            self.integral = 0.0
+            output = self.output_min
+        elif output > self.output_max:
+            self.integral = 0.0
+            output = self.output_max
+        return output

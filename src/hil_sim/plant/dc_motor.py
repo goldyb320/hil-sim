@@ -8,7 +8,7 @@ Inputs:
     v_applied    terminal voltage [V]
     t_load_nm    load torque opposing motion [N*m]
 
-Equations (write these yourself -- see docs/roadmap.md, milestone 1):
+Equations:
     Electrical: V = L*di/dt + R*i + Ke*omega
     Mechanical: J*domega/dt = Kt*i - b*omega - T_load
 """
@@ -30,8 +30,17 @@ class DCMotorParams:
     b_nm_s_per_rad: float = 1e-6  # viscous friction
 
 
-def derivatives(
-    x: np.ndarray, v_applied: float, t_load_nm: float, p: DCMotorParams
-) -> np.ndarray:
+# v_applied is the terminal voltage applied to the motor
+# t_load_nm is the load torque opposing motion
+# p is the DCMotorParams object
+def derivatives(x: np.ndarray, v_applied: float, t_load_nm: float, p: DCMotorParams) -> np.ndarray:
     """Return dx/dt = [di_a/dt, domega/dt] for the current state and inputs."""
-    raise NotImplementedError("Milestone 1: implement the two DC motor equations")
+    i_a, omega_rad_s = x
+
+    # Electrical: V = L*di/dt + R*i + Ke*omega
+    # Mechanical: J*domega/dt = Kt*i - b*omega - T_load
+    # Equations are rearranged to solve for di/dt and domega/dt.
+    di_a_dt = (v_applied - p.R_ohm * i_a - p.Ke_v_per_rad_s * omega_rad_s) / p.L_h
+    domega_dt = (p.Kt_nm_per_a * i_a - p.b_nm_s_per_rad * omega_rad_s - t_load_nm) / p.J_kg_m2
+
+    return np.array([di_a_dt, domega_dt])
