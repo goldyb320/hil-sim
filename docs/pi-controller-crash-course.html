@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PI speed control, a crash course — hil-sim</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f6f7; --panel:#ffffff; --ink:#18202b; --ink-2:#4a5463; --ink-3:#7a8392;
+  --rule:#d8dde3; --grid:#e6e9ed;
+  --speed:#1f5fae; --p:#d06a12; --i:#16855a; --set:#7a8392; --warn:#b3261e;
+  --code-bg:#eceff2;
+  --sans:"IBM Plex Sans",-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,"Courier New",monospace;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11161d; --panel:#18202a; --ink:#e6eaef; --ink-2:#b3bcc8; --ink-3:#808b99;
+    --rule:#2c3643; --grid:#232c37; --speed:#5b9ae6; --p:#f0924a; --i:#3cc28c; --set:#8a95a3; --warn:#f07b73;
+    --code-bg:#1f2833;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11161d; --panel:#18202a; --ink:#e6eaef; --ink-2:#b3bcc8; --ink-3:#808b99;
+  --rule:#2c3643; --grid:#232c37; --speed:#5b9ae6; --p:#f0924a; --i:#3cc28c; --set:#8a95a3; --warn:#f07b73;
+  --code-bg:#1f2833;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.65 var(--sans)}
+main{max-width:760px;margin:0 auto;padding:3rem 1.25rem 5rem}
+h1{font-size:2.1rem;line-height:1.2;font-weight:600;margin:0 0 .6rem;letter-spacing:-.01em}
+h2{font-size:1.35rem;font-weight:600;margin:3rem 0 .8rem;padding-top:1.2rem;border-top:1px solid var(--rule)}
+h3{font-size:1.05rem;font-weight:600;margin:1.8rem 0 .4rem}
+p,li{color:var(--ink)}
+.lede{font-size:1.1rem;color:var(--ink-2);margin:0 0 2rem}
+code{font-family:var(--mono);font-size:.88em;background:var(--code-bg);padding:.1em .35em;border-radius:3px}
+pre{font-family:var(--mono);font-size:.85rem;background:var(--code-bg);padding:1rem;border-radius:6px;overflow-x:auto;line-height:1.5}
+.eq{font-family:var(--mono);font-size:.95rem;background:var(--panel);border-left:3px solid var(--speed);padding:.7rem 1rem;margin:1rem 0}
+.rule{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:1rem 1.25rem;margin:1.25rem 0}
+.rule p{margin:.3rem 0}
+.tbl{overflow-x:auto;margin:1rem 0}
+table{border-collapse:collapse;width:100%;font-size:.93rem;min-width:560px}
+th,td{text-align:left;vertical-align:top;padding:.55rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--ink-2)}
+.sw{display:inline-block;width:.8em;height:.8em;border-radius:2px;vertical-align:-.05em;margin-right:.3em}
+
+/* simulator */
+.sim{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:1.25rem;margin:1.5rem 0 2rem}
+.ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.6rem 1.5rem;margin-bottom:1rem}
+.ctl label{display:flex;flex-direction:column;font-size:.85rem;color:var(--ink-2)}
+.ctl .top{display:flex;justify-content:space-between}
+.ctl .val{font-family:var(--mono);color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--speed)}
+.toggles{display:flex;flex-wrap:wrap;gap:1rem;align-items:center;font-size:.9rem;color:var(--ink-2);margin:.2rem 0 1rem}
+.presets{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
+button{font:500 .85rem var(--sans);color:var(--ink);background:transparent;border:1px solid var(--rule);border-radius:6px;padding:.4rem .75rem;cursor:pointer}
+button:hover{border-color:var(--ink-3)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--speed);outline-offset:2px}
+select{font:inherit;font-size:.9rem;color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:.2rem .4rem}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.6rem;margin:0 0 1rem}
+.stat{border:1px solid var(--rule);border-radius:6px;padding:.5rem .7rem}
+.stat .k{font-size:.78rem;color:var(--ink-3)}
+.stat .v{font-family:var(--mono);font-size:1.05rem}
+.legend{display:flex;flex-wrap:wrap;gap:1rem;font-size:.82rem;color:var(--ink-2);margin:.4rem 0 .2rem}
+.plot{position:relative;width:100%;height:230px}
+.plot canvas{display:block;width:100%;height:100%}
+.readout{font-family:var(--mono);font-size:.78rem;color:var(--ink-2);min-height:1.3em;margin:.2rem 0 .8rem}
+.note{font-size:.85rem;color:var(--ink-3)}
+</style>
+</head>
+<body>
+<main>
+
+<h1>PI speed control, a crash course</h1>
+<p class="lede">How a PI controller holds your DC motor at a target speed, why it overshoots, what integrator windup is, and how to predict what happens when you change the gains. The simulator uses the same motor parameters and the same 1&nbsp;kHz controller / 50&nbsp;µs plant setup as <code>scripts/run_closed_loop.py</code>.</p>
+
+<div class="sim" id="sim">
+  <div class="presets" role="group" aria-label="Experiment presets">
+    <button data-p="clean">Small step</button>
+    <button data-p="ponly">P only</button>
+    <button data-p="windup">Windup</button>
+    <button data-p="aw">Anti-windup</button>
+    <button data-p="load">Load step</button>
+    <button data-p="hot">High Kp</button>
+  </div>
+  <div class="ctl">
+    <label><span class="top">Kp <span class="val" id="kpv"></span></span><input type="range" id="kp" min="0" max="0.25" step="0.005"></label>
+    <label><span class="top">Ki <span class="val" id="kiv"></span></span><input type="range" id="ki" min="0" max="3" step="0.05"></label>
+    <label><span class="top">Setpoint (rad/s) <span class="val" id="spv"></span></span><input type="range" id="sp" min="50" max="1150" step="10"></label>
+    <label><span class="top">Load torque at 0.4 s (N·m) <span class="val" id="ldv"></span></span><input type="range" id="ld" min="0" max="0.05" step="0.002"></label>
+  </div>
+  <div class="toggles">
+    <label><input type="checkbox" id="aw"> Anti-windup</label>
+    <label>Controller rate
+      <select id="hz"><option>200</option><option>500</option><option selected>1000</option><option>5000</option></select> Hz
+    </label>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="k">Overshoot</div><div class="v" id="s-os">–</div></div>
+    <div class="stat"><div class="k">Settling time (2%)</div><div class="v" id="s-ts">–</div></div>
+    <div class="stat"><div class="k">Error before load</div><div class="v" id="s-ss">–</div></div>
+    <div class="stat"><div class="k">Time saturated</div><div class="v" id="s-sat">–</div></div>
+  </div>
+  <div class="legend"><span><span class="sw" style="background:var(--speed)"></span>speed</span><span><span class="sw" style="background:var(--set)"></span>setpoint (dashed)</span></div>
+  <div class="plot"><canvas id="c1" role="img" aria-label="Motor speed and setpoint over time"></canvas></div>
+  <div class="readout" id="r1">&nbsp;</div>
+  <div class="legend"><span><span class="sw" style="background:var(--speed)"></span>output voltage</span><span><span class="sw" style="background:var(--p)"></span>P term (dashed)</span><span><span class="sw" style="background:var(--i)"></span>I term (dotted)</span><span><span class="sw" style="background:var(--warn)"></span>±12 V limit</span></div>
+  <div class="plot"><canvas id="c2" role="img" aria-label="P term, I term and clamped output voltage over time"></canvas></div>
+  <div class="readout" id="r2">&nbsp;</div>
+  <p class="note">Hover or touch a plot to read values. Before each change, predict what will happen, then check.</p>
+</div>
+
+<h2>What the controller does</h2>
+<p>You pick a target speed (the setpoint). Every control cycle the controller:</p>
+<ol>
+  <li>Measures the speed.</li>
+  <li>Computes <code>error = setpoint − speed</code>.</li>
+  <li>Computes <code>P = Kp × error</code>.</li>
+  <li>Adds to a running total: <code>integral += error × dt</code>, then <code>I = Ki × integral</code>.</li>
+  <li>Outputs <code>P + I</code>, clamped to ±12 V, and holds it until the next cycle.</li>
+</ol>
+
+<h3>The motor, in three numbers</h3>
+<p>It gains about 99 rad/s per volt at steady state, its speed responds with a time constant of about 0.1 s, and 12 V gets it to roughly 1,190 rad/s. Holding a given speed needs a specific steady voltage, about speed ÷ 99 (more under load). Holding 800 rad/s takes about 8 V.</p>
+
+<h3>P is a spring</h3>
+<p>It pushes in proportion to how far away you are right now and forgets the past instantly. At the target, P contributes nothing, so P alone can never supply the steady voltage the motor needs. With P only, the motor settles short of the setpoint, because it needs a leftover error to produce any voltage at all. That gap is steady-state error. Raising Kp shrinks it but never closes it.</p>
+
+<h3>I is a tank</h3>
+<p>The integral is a water tank. The error is a pipe: it fills the tank while the speed is below target and drains it while the speed is above. The I term's voltage is <code>Ki × tank level</code>. At steady state the error is zero, so P is zero and the tank alone supplies the steady voltage. That means the tank's final level is set by the motor, not by you:</p>
+<div class="eq">final integral = (steady voltage needed) ÷ Ki</div>
+
+<h2>The rule that predicts most behavior</h2>
+<div class="rule">
+<p>The tank level is just the area between the setpoint and the speed curve. So all the area stored <em>below</em> the setpoint during the rise, minus the area <em>above</em> it during any overshoot, must equal exactly what the motor needs at steady state.</p>
+<p>If the rise stores more than needed, the excess has to be paid back as overshoot. The only way to drain the tank is to be above the setpoint.</p>
+</div>
+<p>Anything that makes the rise slow while the error is large (saturation, a sluggish motor, a high Ki) stores more area and causes more overshoot.</p>
+
+<h2>Integrator windup</h2>
+<p>With Kp = 0.05, Ki = 0.5 and no anti-windup, ask for 800 rad/s from standstill (press <em>Windup</em> above):</p>
+<ul>
+  <li><strong>t = 0.</strong> Error is 800, so P alone asks for 40 V. The clamp outputs 12 V.</li>
+  <li><strong>0 to about 0.11 s.</strong> The motor climbs at full voltage. The error is large the whole time, so the tank fills, but none of it does anything because the output is already pinned at 12 V. The controller is storing demand the supply can't deliver.</li>
+  <li><strong>About 0.11 s, speed reaches 800.</strong> P is now zero, but the I term alone asks for about 18 V. The motor only needs 8 V. The output stays at 12 V and the motor keeps accelerating past the target.</li>
+  <li><strong>Afterwards.</strong> The tank only drains while the speed is above 800. The motor has to stay above the target until the I term falls from about 18 V to about 8 V. Result: a big overshoot and a slow, sagging return.</li>
+</ul>
+
+<h3>Anti-windup</h3>
+<p>Stop the tank from filling while the output is clamped. Storing demand the actuator can't deliver is pointless. Two common ways:</p>
+<ul>
+  <li><strong>Conditional integration.</strong> While saturated, skip adding this cycle's error, unless that error would pull the output back out of saturation. The integral freezes at its current value. This is what the simulator uses.</li>
+  <li><strong>Integral clamping.</strong> Limit the integral so the I term alone can never exceed the output limits.</li>
+</ul>
+<p>Anti-windup must <em>freeze</em> the integral, not erase it. The integral holds real information: the voltage the motor needs. Zeroing it on saturation throws that away. The symptom is sudden vertical drops in the voltage command, often down to exactly <code>Kp × error</code>, followed by negative current as back-EMF briefly exceeds the applied voltage. A useful test: drive the controller into saturation and check that the integral is unchanged, not zero.</p>
+<p>Real actuators all have limits: driver voltage and current limits, throttle travel, steering stops. Any PI loop that hits one can wind up. Deliberately driving a controller into its limits, safely and repeatably, is exactly what HIL testing is for.</p>
+
+<h2>Why PI and not PID</h2>
+<p>The D term reacts to how fast the error is changing. It anticipates and damps overshoot caused by momentum. That matters for <strong>position</strong> control, where a motor carries momentum past a target angle.</p>
+<p><strong>Speed</strong> control doesn't have that problem. From voltage to speed, the motor behaves like a simple first-order system, and it settles without oscillating on its own, so D has nothing to damp. Meanwhile D amplifies measurement noise (encoder speed is noisy and quantized) and produces a large spike whenever the setpoint jumps. That's why motor speed and current loops are almost always PI, and position loops use P, PD, or PID.</p>
+
+<h2>Predicting what changes do</h2>
+<div class="tbl"><table>
+<thead><tr><th>You change</th><th>What happens</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td>Kp up</td><td>Faster rise; eventually chatter or oscillation</td><td>Stronger spring. With a sampled controller, too strong overshoots every cycle.</td></tr>
+<tr><td>Kp to 0 (I only)</td><td>Slow, overshooting, wave-like</td><td>Only the tank acts, and it always lags.</td></tr>
+<tr><td>Ki up</td><td>Steady-state error disappears faster, but more overshoot</td><td>The tank fills faster during the rise and stores excess area.</td></tr>
+<tr><td>Ki to 0 (P only)</td><td>Settles below target; sags under load and stays down</td><td>Nothing supplies the steady voltage.</td></tr>
+<tr><td>Small setpoint step</td><td>Clean, never saturates</td><td>P + I stays under 12 V, so the loop behaves linearly.</td></tr>
+<tr><td>Large step, no anti-windup</td><td>Output pinned at 12 V, then big overshoot</td><td>Tank fills with demand the motor can't use.</td></tr>
+<tr><td>Large step, anti-windup</td><td>Clean approach even at 12 V</td><td>Tank frozen while clamped; no excess stored.</td></tr>
+<tr><td>Setpoint near 1,190 rad/s</td><td>Slow final approach</td><td>Little voltage headroom above what's needed to hold speed.</td></tr>
+<tr><td>Load torque applied</td><td>Dip then recovery (PI); permanent sag (P only)</td><td>The motor now needs more voltage, so the tank must refill to a new level.</td></tr>
+<tr><td>Controller rate down</td><td>High Kp becomes unstable sooner</td><td>Longer hold between updates means the controller reacts to stale information.</td></tr>
+</tbody>
+</table></div>
+
+<h3>Starting gains</h3>
+<p>A classic starting point sets <code>Ki / Kp = 1 / (mechanical time constant)</code>, about 10 for this motor, then chooses Kp for the response speed you want. For roughly a 20 ms response: Kp ≈ 0.05, Ki ≈ 0.5.</p>
+
+<h2>Experiments</h2>
+<ol>
+  <li><strong>P only.</strong> The speed stops short of the dashed line. Raise Kp: the gap shrinks but never closes.</li>
+  <li><strong>Small step.</strong> Setpoint 100: clean, nothing touches 12 V.</li>
+  <li><strong>Windup.</strong> Watch the output sit at 12 V while the I term climbs. The I term peaks right as the speed crosses the setpoint, then drains only while the speed is above it.</li>
+  <li><strong>Anti-windup.</strong> The I term stays flat while clamped, then rises gently. Compare the overshoot readouts.</li>
+  <li><strong>Load step.</strong> At 0.4 s the speed dips and the I term climbs to a new, higher level. Then set Ki to 0 and watch the speed sag and stay down.</li>
+  <li><strong>High Kp.</strong> Look for chatter in the output. Drop the controller rate to 200 Hz and watch it get worse: the controller's timing matters, which is exactly what HIL exists to test.</li>
+</ol>
+
+</main>
+
+<script>
+(function(){
+const R=1,L=0.5e-3,Ke=0.01,Kt=0.01,J=1e-5,b=1e-6,VM=12,T=0.7,DT=5e-5,TLOAD=0.4;
+const $=id=>document.getElementById(id);
+const presets={
+  clean:{kp:0.05,ki:0.5,sp:100,ld:0,aw:true,hz:1000},
+  ponly:{kp:0.05,ki:0,sp:500,ld:0,aw:true,hz:1000},
+  windup:{kp:0.05,ki:0.5,sp:800,ld:0,aw:false,hz:1000},
+  aw:{kp:0.05,ki:0.5,sp:800,ld:0,aw:true,hz:1000},
+  load:{kp:0.05,ki:0.5,sp:500,ld:0.02,aw:true,hz:1000},
+  hot:{kp:0.2,ki:0.5,sp:500,ld:0,aw:true,hz:1000}
+};
+
+function simulate(kp,ki,sp,ld,aw,hz){
+  const CT=1/hz, per=Math.max(1,Math.round(CT/DT)), n=Math.round(T/DT);
+  let i=0,w=0,I=0,v=0,p=0,ti=0,sat=0;
+  const o={t:[],w:[],v:[],p:[],it:[]};
+  const rec=Math.round(5e-4/DT);
+  for(let k=0;k<=n;k++){
+    const t=k*DT, tl=t>=TLOAD?ld:0;
+    if(k%per===0){
+      const e=sp-w, In=I+e*CT, u=kp*e+ki*In;
+      if(!aw||(u<=VM&&u>=-VM)||(u>VM&&e<0)||(u<-VM&&e>0)) I=In;
+      p=kp*e; ti=ki*I; const raw=p+ti;
+      v=Math.max(-VM,Math.min(VM,raw));
+      if(raw>VM||raw<-VM) sat+=CT;
+    }
+    if(k%rec===0){o.t.push(t);o.w.push(w);o.v.push(v);o.p.push(p);o.it.push(ti);}
+    const di=(v-R*i-Ke*w)/L, dw=(Kt*i-b*w-tl)/J;
+    i+=di*DT; w+=dw*DT;
+  }
+  o.sat=sat; return o;
+}
+
+function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
+
+function draw(cv,o,series,ymin,ymax,unit,hlines,hoverIdx){
+  const dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
+  cv.width=W*dpr; cv.height=H*dpr;
+  const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
+  const m={l:52,r:10,t:8,b:24}, pw=W-m.l-m.r, ph=H-m.t-m.b;
+  const X=t=>m.l+t/T*pw, Y=y=>m.t+(1-(y-ymin)/(ymax-ymin))*ph;
+  g.font='11px '+css('--sans'); g.fillStyle=css('--ink-3'); g.strokeStyle=css('--grid'); g.lineWidth=1;
+  const step=niceStep((ymax-ymin)/5);
+  g.textAlign='right'; g.textBaseline='middle';
+  for(let y=Math.ceil(ymin/step)*step;y<=ymax+1e-9;y+=step){
+    g.beginPath(); g.moveTo(m.l,Y(y)); g.lineTo(W-m.r,Y(y)); g.stroke();
+    g.fillText(fmt(y),m.l-6,Y(y));
+  }
+  g.textAlign='center'; g.textBaseline='top';
+  for(let t=0;t<=T+1e-9;t+=0.1){ g.fillText(t.toFixed(1)+' s',X(t),H-m.b+6); }
+  g.save(); g.translate(12,m.t+ph/2); g.rotate(-Math.PI/2); g.textBaseline='middle'; g.fillText(unit,0,0); g.restore();
+  (hlines||[]).forEach(h=>{ g.strokeStyle=css(h.c); g.setLineDash(h.dash||[]); g.lineWidth=1.25;
+    g.beginPath(); g.moveTo(m.l,Y(h.y)); g.lineTo(W-m.r,Y(h.y)); g.stroke(); });
+  g.save(); g.beginPath(); g.rect(m.l,m.t,pw,ph); g.clip();
+  series.forEach(s=>{ g.strokeStyle=css(s.c); g.lineWidth=s.w||2; g.setLineDash(s.dash||[]); g.lineJoin='round'; g.lineCap='round';
+    g.beginPath(); s.d.forEach((y,k)=>{const px=X(o.t[k]),py=Y(y); k?g.lineTo(px,py):g.moveTo(px,py);}); g.stroke(); });
+  g.restore(); g.setLineDash([]);
+  if(hoverIdx!=null){ g.strokeStyle=css('--ink-3'); g.lineWidth=1; const px=X(o.t[hoverIdx]);
+    g.beginPath(); g.moveTo(px,m.t); g.lineTo(px,m.t+ph); g.stroke(); }
+  cv._map={m,pw};
+}
+function niceStep(r){const p=Math.pow(10,Math.floor(Math.log10(r))),f=r/p;return (f<1.5?1:f<3?2:f<7?5:10)*p;}
+function fmt(y){return Math.abs(y)>=100?Math.round(y).toString():(Math.round(y*10)/10).toString();}
+
+let st={}, out=null, hov=null;
+function readUI(){st={kp:+$('kp').value,ki:+$('ki').value,sp:+$('sp').value,ld:+$('ld').value,aw:$('aw').checked,hz:+$('hz').value};}
+function writeUI(s){$('kp').value=s.kp;$('ki').value=s.ki;$('sp').value=s.sp;$('ld').value=s.ld;$('aw').checked=s.aw;$('hz').value=s.hz;}
+
+function stats(o){
+  const sp=st.sp, pre=o.t.map((t,k)=>k).filter(k=>o.t[k]<TLOAD);
+  let mx=-1e9; pre.forEach(k=>{if(o.w[k]>mx)mx=o.w[k];});
+  const os=Math.max(0,(mx-sp)/sp*100);
+  let ts=null; for(let k=pre.length-1;k>=0;k--){ if(Math.abs(o.w[pre[k]]-sp)>0.02*sp){ts=o.t[pre[k]];break;} }
+  const last=pre[pre.length-1], ss=sp-o.w[last];
+  $('s-os').textContent=os.toFixed(1)+' %';
+  $('s-ts').textContent=ts===null?'0 ms':(ts>=TLOAD-0.001?'> 400 ms':Math.round(ts*1000)+' ms');
+  $('s-ss').textContent=ss.toFixed(1)+' rad/s';
+  $('s-sat').textContent=Math.round(o.sat*1000)+' ms';
+}
+
+function render(){
+  const o=out, wmax=Math.max(...o.w,st.sp);
+  const top=Math.max(200,Math.ceil(wmax*1.15/100)*100);
+  draw($('c1'),o,[{d:o.w,c:'--speed'}],0,top,'rad/s',[{y:st.sp,c:'--set',dash:[6,4]}],hov);
+  const vals=o.p.concat(o.it);
+  const vtop=Math.min(60,Math.max(15,Math.ceil(Math.max(...vals)/5)*5+3));
+  const vbot=Math.max(-60,Math.min(-15,Math.floor(Math.min(...vals)/5)*5-3));
+  draw($('c2'),o,[{d:o.p,c:'--p',dash:[6,4],w:1.5},{d:o.it,c:'--i',dash:[2,3],w:2},{d:o.v,c:'--speed',w:2}],vbot,vtop,'volts',
+    [{y:VM,c:'--warn',dash:[2,4]},{y:-VM,c:'--warn',dash:[2,4]}],hov);
+  if(hov!=null){
+    $('r1').textContent='t = '+(o.t[hov]*1000).toFixed(1)+' ms   speed = '+o.w[hov].toFixed(1)+' rad/s   error = '+(st.sp-o.w[hov]).toFixed(1);
+    $('r2').textContent='output = '+o.v[hov].toFixed(2)+' V   P = '+o.p[hov].toFixed(2)+' V   I = '+o.it[hov].toFixed(2)+' V';
+  } else { $('r1').innerHTML='&nbsp;'; $('r2').innerHTML='&nbsp;'; }
+}
+
+function run(){
+  readUI();
+  $('kpv').textContent=st.kp.toFixed(3); $('kiv').textContent=st.ki.toFixed(2);
+  $('spv').textContent=st.sp; $('ldv').textContent=st.ld.toFixed(3);
+  out=simulate(st.kp,st.ki,st.sp,st.ld,st.aw,st.hz); stats(out); render();
+}
+
+function hover(e){
+  const cv=e.currentTarget, r=cv.getBoundingClientRect(), mp=cv._map; if(!mp||!out) return;
+  const cx=(e.touches?e.touches[0].clientX:e.clientX)-r.left;
+  const t=Math.min(T,Math.max(0,(cx-mp.m.l)/mp.pw*T));
+  hov=Math.min(out.t.length-1,Math.round(t/(out.t[1]-out.t[0]))); render();
+}
+['c1','c2'].forEach(id=>{const c=$(id);
+  c.addEventListener('mousemove',hover); c.addEventListener('touchmove',hover,{passive:true});
+  c.addEventListener('mouseleave',()=>{hov=null;render();});});
+['kp','ki','sp','ld','aw','hz'].forEach(id=>$(id).addEventListener('input',()=>{hov=null;run();}));
+document.querySelectorAll('[data-p]').forEach(b=>b.addEventListener('click',()=>{writeUI(presets[b.dataset.p]);hov=null;run();}));
+window.addEventListener('resize',()=>out&&render());
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>out&&render());
+writeUI(presets.windup); run();
+})();
+</script>
+</body>
+</html>
